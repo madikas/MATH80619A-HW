@@ -1,0 +1,28 @@
+---
+title: "Assignment #1 - chapter 2"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## **Question 1**
+
+A.
+
+B.
+
+C.
+
+```{r cars}
+summary(cars)
+```
+
+## **Question 2**
+
+```{r cars}
+summary(cars)
+```
+
+## Question 3
