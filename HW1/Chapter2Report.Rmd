@@ -1,28 +1,74 @@
 ---
 title: "Assignment #1 - chapter 2"
 output: pdf_document
+authors: Madi Kassymbekov
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+source("HW1-Q1.R")
+source("HW1-Q2.R")
 ```
 
-## **Question 1**
+## **Question 1 (R code in file HW1-Q1.R)**
+a.Using Caret tuning function, optimal alpha is 0.97 and optimal lambda is 1.
+MSE is 975.9 and MAE is 19.64668
 
-A.
+```{r, echo=FALSE, warning=FALSE}
+Q1results[1,]
+```
+b.Using own 10-FOld CV function, optimal alpha is 0.07 and lambda is 3. Due to inefficient code and cpu constraints lambda sequence was used between 1 and 3. Best MSE is 987.1541 and best MAE is 19.95087. As caret is well-tested and has optimal code base, it outperformed my own function but end result of own cv function is not way too off from caret optimal estimates. 
+```{r, echo=FALSE, warning=FALSE}
+Q1results[2,]
+```
+c.Both caret and own optimal elastic net regression models performed worse than models on slide 83 except simple OLS regression, which suggests that there are highly correlated variables in the model which leads to multicollinearity and therefore affect coefficients or the model complexity of the elastic model is too high which leads to overfitting. Multicollinearity problem is dealt well by the Ridge regression model, while Lasso regression performs feature selection which leads to the end model to become less complex and therefore prevent overfitting. In this terms, elastic net as a compromise between Ridge and Lasso seems not a good fit for ames dataset.
+![Slide 83 Models]("Q1Models.png"){height=50%}
 
-B.
+## **Question 2 (R code in file HW1-Q2.R)**
+After fitting various regression models on music dataset, own optimal elastic net cross validation model performed the a little better in terms of MSE (265.5898), while forward selection model performed a little better than others in terms of MAE (12.55716). It should be noted that all models performed similarly in terms of error and there is no obvious best model which outperforms others by a huge margin, however overall, elastic net models performed a little better than lasso, ridge and OLS. 
 
-C.
-
-```{r cars}
-summary(cars)
+```{r, echo=FALSE, warning=FALSE}
+Q2results
 ```
 
-## **Question 2**
+## **Question 3: Multiple Choice Questions**
 
-```{r cars}
-summary(cars)
-```
+**1.Which of the following statements is true? (Only one statement is true)**
 
-## Question 3
+A.Lasso regression L1-norm penalty's purposes are feature selection, fight with overfitting and smoothing.    
+
+Answer: False. Primary purpose of L1 penalty is to fight with overfitting. In Lasso, as the penalty increases, more features are driven to zero which is used for feature selection for the best model. However, L1 loss function does not have continuous derivatives and therefore smoothing is not one of the primary goals of Lasso regression.    
+
+B. As Ridge regression regularization parameter increases, regression coefficients also increase.   
+
+Answer: False. While regularization parameter increases, coefficients are reduced to near zero, however they are not discarded like in Lasso regression and therefore Ridge regression is not used for feature selection but to deal with multicollinearity.    
+
+C. The Lasso Regression regularization parameter increases the sparsity of the resulting solutions.   
+
+Answer: True. Lasso regression regularization parameter is L1-norm penalty which means as the penalty increases, more parameters will be driven to zero, therefore more sparse resulting solutions.    
+
+D. Multicollinearity affects the prediction capability of the model.    
+
+Answer: False. Multicollinearity affects the coefficient estimates, standard errors and p-values estimates of predictors and intercept which makes it much harder to understand the effect of the predictor on the target variable but it does not affect the prediction capability or  goodness of fit.    
+
+**2.What can be concluded about a model based on a tuning lambda parameter of Ridge Regression?**
+
+A. In case of very large lambda; bias is low, variance is high.  
+
+Answer: False. Very large lambda means the low complexity of the model which by bias-variance tradeoff
+signifies a model with high bias and low variance.    
+
+B. In case of very small lambda; bias is low, variance is high.   
+
+Answer: True. Very small lambda means the high comlexity of the model which by bias-variance tradeoff
+signifies a model with high variance and small bias.    
+
+C. When lambda is 0, model is uninterpretable.    
+
+Answer: False. When lambda is 0, Ridge Regression will act as an OLS regression and therefore all the predictors can be interpreted.    
+
+D. Lambda value affects the coefficients of predictors which can be used as a guideline for feature selection.        
+
+Answer: False. It's true that large lambda will shrink coefficient parameters towards zero, however it will not discard less important predictors by setting them to zero. Therefore, Ridge regression is not suitable for feature selection, while Lasso regression is used for that.
