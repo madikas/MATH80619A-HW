@@ -75,7 +75,7 @@ cv.optimalElasticNet <- function(seed, x, y, fold, alpha, lambda, xtrain, ytrain
 
 #Run 10fold CV Elastc Net
 
-lambda.grid <- seq(1,3, 0.1)
+lambda.grid <- seq(1,4, 0.1)
 ElasticNetNoCaret <- cv.optimalElasticNet(123456, xdum, amesdum$Sale_Price, 10, alpha.grid, lambda.grid, xdumtrain, amesdumtrain$Sale_Price, xdumtest, amesdumtest$Sale_Price)
 Q1results[nrow(Q1results) + 1,] = list(Model=ElasticNetNoCaret$Model, MSE=ElasticNetNoCaret$MSE, 
                                        MAE=ElasticNetNoCaret$MAE, Alpha=ElasticNetNoCaret$Alpha, Lambda=ElasticNetNoCaret$Lambda)

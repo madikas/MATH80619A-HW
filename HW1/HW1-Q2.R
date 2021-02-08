@@ -139,7 +139,7 @@ cv.optimalElasticNet <- function(seed, x, y, fold, alpha, lambda, xtrain, ytrain
 }
 
 alpha.grid <- seq(0, 1, 0.01)
-lambda.grid <- seq(1,3, 0.1)
+lambda.grid <- seq(1,4, 0.1)
 ElasticNetNoCaret <- cv.optimalElasticNet(123456, xmusicset, musicset$y, 10, alpha.grid, lambda.grid, xtrain, trainset$y, xtest, testset$y)
 Q2results[nrow(Q2results) + 1,] = list(Model=ElasticNetNoCaret$Model,MSE=ElasticNetNoCaret$MSE, MAE=ElasticNetNoCaret$MAE)
 
