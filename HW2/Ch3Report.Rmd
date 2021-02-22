@@ -10,7 +10,15 @@ knitr::opts_chunk$set(message = FALSE)
 knitr::opts_chunk$set(warning = FALSE)
 ```
 ## **Question 1**
-![6 Regions map and Decision Tree]("q1.png"){height=50%}
+This is a map of income and age relationship on estimating the credit score. Income cut points are 25k and 100k dollars to segment people into poor, average and wealthy people, while cut points for age are 18 and 65 to segment people into children, adults and senior people. Regions mapped from 1 to 7 mean the following:    
+R1 - N/A credit score (not applicable for children)   
+R2 - low income adult, poor credit score    
+R3 - average income adult, average credit score   
+R4 - wealthy adult, excellent credit score    
+R5 - low income senior, poor credit score   
+R6 - average income senior, average credit score (mortgage not allowed due to age)    
+R7 - wealthy senior, excellent credit score (mortgage not allowed due to age)   
+![7 Regions map and Decision Tree]("q1tree.jpg"){height=55%}
 
 ## **Question 2**
 Majority vote technique
@@ -29,21 +37,10 @@ library(randomForest)
 library(party)
 trainset <- read.csv("data/pimadiabetes_train.csv")
 testset <- read.csv("data/pimadiabetes_test.csv")
-set.seed(123456)
-
-#Find optimal cut-off for binary classification
+set.seed(37569)
+#Find optimal cut-off for binary classification function from notes
 bestcutp=function(predcv,y,gainmat=diag(2),cutp=seq(0,1,.02),plotit=FALSE)
 {
-# predcv = vector of predicted probabilities (obtained out-of-sample by CV for example)
-# y = vector of target (0-1)
-# gainmat = gain matrix (2X2) (we want to maximize the gain)
-# (1,1) = gain if pred=0 and true=0 (1,2) = gain if pred=0 and true=1
-# (2,1) = gain if pred=1 and true=0 (2,2) = gain if pred=1 and true=1
-# cutp=vector of thresholds to try
-# plotit=plot or not the results
-# value: a list with
-# 1) matrix giving the thresholds and estimated mean gains
-# 2) the threshold with maximum gain, with the associated mean gain
   nc=length(cutp) ; gain=rep(0,nc)
   for(i in 1:nc)
   {
@@ -57,47 +54,58 @@ bestcutp=function(predcv,y,gainmat=diag(2),cutp=seq(0,1,.02),plotit=FALSE)
   out[[2]]=out[[1]][which.max(gain),]
   out
 }
-
-
-#a) Grow a single tree using the CART algorithm based on a cutoff of 0.5 for prediction
+```
+**a) Grow a single tree using the CART algorithm based on a cutoff of 0.5 for prediction**
+```{r}
 cart.fit <- rpart(diabetes~., data=trainset, method="class")
 cart.predict <- predict(cart.fit, newdata=testset, type="class")
 confmatrix <- table(cart.predict, testset$diabetes)
-print("CART confusion matrix")
-confmatrix
+knitr::kable(confmatrix, caption="CART confusion matrix")
 error_rate <- mean(cart.predict!=testset$diabetes)
+fpr <- confmatrix["1","0"]/(confmatrix["1","0"]+confmatrix["0","0"])
+fnr <- confmatrix["0","1"]/(confmatrix["0","1"]+confmatrix["1","1"])
 results <- data.frame("CART", mean(cart.predict!=testset$diabetes), 
                     confmatrix["1","0"]/(confmatrix["1","0"]+confmatrix["0","0"]),
                     confmatrix["0","1"]/(confmatrix["0","1"]+confmatrix["1","1"]))
 names(results) <- c("Model", "Error_Rate", "FalsePosRate", "FalseNegRate")
-
-#b)Repeat question a) using an optimal cutoff minimizing the global error rate 
-#assuming an equal cost between false positive and false negative. In general, 
-#can you compare the error rates computed using different gain matrices 
-#(answer yes or no, and explain)?
+knitr::kable(results, caption="CART Model Performance")
+```
+**b)Repeat question a) using an optimal cutoff minimizing the global error rate assuming an equal cost between false positive and false negative. In general, can you compare the error rates computed using different gain matrices (answer yes or no, and explain)?**
+```{r}
 predcartprob <- predict(cart.fit, newdata=testset, type="prob")
 optcutoff <- bestcutp(predcartprob[,2], testset$diabetes, gainmat=diag(2), 
 cutp = seq(0,1,.02, plotit=FALSE))
 optcutoff[[2]] #Optimal cut-off value
 predcartoptimal <- as.numeric(predcartprob[,2]>optcutoff[[2]][1])
 confmatrix <- table(predcartoptimal, testset$diabetes)
-print("CART optimal cut-off confusion matrix")
-confmatrix
+knitr::kable(confmatrix, caption="CART optimal cut-off confusion matrix")
+error_rate <- mean(predcartoptimal!=testset$diabetes)
+fpr <- confmatrix["1","0"]/(confmatrix["1","0"]+confmatrix["0","0"])
+fnr <- confmatrix["0","1"]/(confmatrix["0","1"]+confmatrix["1","1"])
 results[nrow(results) + 1,] = list(Model="CART optimal cut-off", 
                                    Error_Rate=mean(predcartoptimal!=testset$diabetes),
 FalsePosRate=confmatrix["1","0"]/(confmatrix["1","0"]+confmatrix["0","0"]),
 FalseNegRate=confmatrix["0","1"]/(confmatrix["0","1"]+confmatrix["1","1"]))
-#c) Repeat questions a) and b) using a conditional tree
-#Ordinary Conditional Tree
+knitr::kable(results[2,], caption="CART optimal cut-off Model Performance")
+```
+Yes, we can compare error rates of different gain matrices as long as the dataset used to calculate it is the same as well as as the target dependent variable. Otherwise, we can't compare the gain matrices' error rate.
+
+**c) Repeat questions a) and b) using a conditional tree**
+```{r}
 ct.fit <- ctree(as.factor(diabetes)~., data=trainset)
 ct.predict <- predict(ct.fit, newdata=testset, type="response")
 confmatrix <- table(ct.predict, testset$diabetes)
-print("Conditional Tree confusion matrix")
-confmatrix
+knitr::kable(confmatrix, caption="Conditional Tree confusion matrix")
+error_rate <- mean(ct.predict!=testset$diabetes)
+fpr <- confmatrix["1","0"]/(confmatrix["1","0"]+confmatrix["0","0"])
+fnr <- confmatrix["0","1"]/(confmatrix["0","1"]+confmatrix["1","1"])
 results[nrow(results) + 1,] = list(Model="Conditional Tree", 
                                    Error_Rate=mean(ct.predict!=testset$diabetes),
 FalsePosRate=confmatrix["1","0"]/(confmatrix["1","0"]+confmatrix["0","0"]),
 FalseNegRate=confmatrix["0","1"]/(confmatrix["0","1"]+confmatrix["1","1"]))
+knitr::kable(results[3,], caption="Conditional Tree Model Performance")
+```
+```{r}
 #Optimal cutoff conditional tree
 predctprob <- predict(ct.fit, newdata=testset, type="prob")
 predctprob <- matrix(unlist(predctprob), ncol=2, byrow=TRUE)
@@ -106,73 +114,93 @@ cutp = seq(0,1,.02, plotit=FALSE))
 optcutoff[[2]] #Optimal cut-off value
 predctoptimal <- as.numeric(predctprob[,2]>optcutoff[[2]][1])
 confmatrix <- table(predctoptimal, testset$diabetes)
-print("Conditional Tree optimal cut-off confusion matrix")
-confmatrix
+knitr::kable(confmatrix, caption="Conditional Tree optimal cut-off confusion matrix")
+error_rate <- mean(predctoptimal!=testset$diabetes)
+fpr <- confmatrix["1","0"]/(confmatrix["1","0"]+confmatrix["0","0"])
+fnr <- confmatrix["0","1"]/(confmatrix["0","1"]+confmatrix["1","1"])
 results[nrow(results) + 1,] = list(Model="Conditional Tree optimal cut-off", 
                                   Error_Rate=mean(predctoptimal!=testset$diabetes),
 FalsePosRate=confmatrix["1","0"]/(confmatrix["1","0"]+confmatrix["0","0"]),
 FalseNegRate=confmatrix["0","1"]/(confmatrix["0","1"]+confmatrix["1","1"]))
-#d) Grow a random forest with B=500 trees using the CART algorithm 
-#and a cutoff of 0.5
+knitr::kable(results[4,], caption="Conditional Tree Optimal cutoff Model Performance")
+```
+**d) Grow a random forest with B=500 trees using the CART algorithm and a cutoff of 0.5**
+```{r}
 rf.fit <- randomForest(as.factor(diabetes)~., data=trainset, ntree=500)
 rf.predict<- predict(rf.fit, newdata=testset, type="response")
 confmatrix <- table(rf.predict, testset$diabetes)
-print("Random Forest CART based confusion matrix")
-confmatrix
+knitr::kable(confmatrix, caption="Random Forest CART based confusion matrix")
+error_rate <- mean(rf.predict!=testset$diabetes)
+fpr <- confmatrix["1","0"]/(confmatrix["1","0"]+confmatrix["0","0"])
+fnr <- confmatrix["0","1"]/(confmatrix["0","1"]+confmatrix["1","1"])
 results[nrow(results) + 1,] = list(Model="Random Forest CART", 
                                    Error_Rate=mean(rf.predict!=testset$diabetes),
 FalsePosRate=confmatrix["1","0"]/(confmatrix["1","0"]+confmatrix["0","0"]),
 FalseNegRate=confmatrix["0","1"]/(confmatrix["0","1"]+confmatrix["1","1"]))
-#e) Grow a random forest with B=500 trees using the conditional tree algorithm 
-#and a cutoff of 0.5
+knitr::kable(results[5,], caption="Random Forest CART based Model Performance")
+```
+**e) Grow a random forest with B=500 trees using the conditional tree algorithm and a cutoff of 0.5**
+```{r}
 cf.fit <- cforest(as.factor(diabetes)~., data=trainset, 
 controls = cforest_control(ntree = 500))
 cf.predict<- predict(cf.fit, newdata=testset, type="response")
 confmatrix <- table(cf.predict, testset$diabetes)
-print("Random Forest Conditional Tree based confusion matrix")
-confmatrix
+knitr::kable(confmatrix, caption="Random Forest Conditional Tree based confusion matrix")
+error_rate <- mean(cf.predict!=testset$diabetes)
+fpr <- confmatrix["1","0"]/(confmatrix["1","0"]+confmatrix["0","0"])
+fnr <- confmatrix["0","1"]/(confmatrix["0","1"]+confmatrix["1","1"])
 results[nrow(results) + 1,] = list(Model="Random Forest CTree", 
                                    Error_Rate=mean(cf.predict!=testset$diabetes),
 FalsePosRate=confmatrix["1","0"]/(confmatrix["1","0"]+confmatrix["0","0"]),
 FalseNegRate=confmatrix["0","1"]/(confmatrix["0","1"]+confmatrix["1","1"]))
-#f) Repeat questions d) and e) using the bagging approach
-#CART Based RF Bagging
-fulldata <- rbind(trainset, testset)
-bag.rf.fit <- randomForest(as.factor(diabetes)~., data=fulldata, 
-subset = 1:568,
+knitr::kable(results[6,], caption="Random Forest Conditional Tree Model Performance")
+```
+**f) Repeat questions d) and e) using the bagging approach** 
+```{r}
+bag.rf.fit <- randomForest(as.factor(diabetes)~., data=trainset, 
+mtry=8,
 ntree=500)
 bag.rf.predict <- predict(bag.rf.fit, newdata=testset)
 confmatrix <- table(bag.rf.predict, testset$diabetes)
-print("Random Forest CART Bagging based confusion matrix")
-confmatrix
+knitr::kable(confmatrix, caption="Random Forest CART Bagging based confusion matrix")
+error_rate <- mean(predcartoptimal!=testset$diabetes)
+fpr <- confmatrix["1","0"]/(confmatrix["1","0"]+confmatrix["0","0"])
+fnr <- confmatrix["0","1"]/(confmatrix["0","1"]+confmatrix["1","1"])
 results[nrow(results) + 1,] = list(Model="Random Forest CART Bagging", 
                                    Error_Rate=mean(bag.rf.predict!=testset$diabetes),
 FalsePosRate=confmatrix["1","0"]/(confmatrix["1","0"]+confmatrix["0","0"]),
 FalseNegRate=confmatrix["0","1"]/(confmatrix["0","1"]+confmatrix["1","1"]))
+knitr::kable(results[7,], caption="Random Forest CART Bagging based Model Performance")
+```
+```{r}
 #CTree Based RF Bagging
-bag.cf.fit <- cforest(as.factor(diabetes)~., data=fulldata, subset = 1:568,
-                           controls = cforest_control(ntree = 500))
+bag.cf.fit <- cforest(as.factor(diabetes)~., data=trainset,
+                           controls = cforest_control(ntree = 500,mtry=8))
 bag.cf.predict <- predict(bag.cf.fit, newdata=testset)
 confmatrix <- table(bag.cf.predict, testset$diabetes)
-print("Random Forest CTree Bagging based confusion matrix")
-confmatrix
+knitr::kable(confmatrix, caption="Random Forest CTree Bagging based confusion matrix")
+error_rate <- mean(bag.cf.predict!=testset$diabetes)
+fpr <- confmatrix["1","0"]/(confmatrix["1","0"]+confmatrix["0","0"])
+fnr <- confmatrix["0","1"]/(confmatrix["0","1"]+confmatrix["1","1"])
 results[nrow(results) + 1,] = list(Model="Random Forest CTree Bagging", 
                                    Error_Rate=mean(bag.cf.predict!=testset$diabetes),
 FalsePosRate=confmatrix["1","0"]/(confmatrix["1","0"]+confmatrix["0","0"]),
 FalseNegRate=confmatrix["0","1"]/(confmatrix["0","1"]+confmatrix["1","1"]))
-results
-#g) Compare the results. Compute the variable importance measures based on the best model.
-cart.fit$variable.importance
+knitr::kable(results[8,], caption="Random Forest CTree Bagging based Model Performance")
 ```
-b. Can you compare the error rates computed using different gain matrices?
+**g) Compare the results. Compute the variable importance measures based on the best model.**
+```{r}
+knitr::kable(results, caption="Models Performance Comparison")
+```
 
-g. Compare the results.Compute the variable importance measures based on the best model.
-
-Based on the results of all the models tested, CART tree with optimal cut-off on average performed the best across all metrics such as best error rate, best false negative rate but worst false positive rate. In terms of variable importance, glucose predictor was the by far the most important in fitting this tree followed by mass and age to define whether diabetes is present.
+Based on the results of all the models tested, CART tree with optimal cut-off on average performed the best across all metrics such as best error rate, best false negative rate but worst false positive rate. In my opinion, it is due to small sized dataset where single tree could perform similar to more advanced methods like random forest and more prone to overfitting. With addition of finding optimal cutoff value, CART with optimal cutoff benefitted a lot decreasing error rate by 1.5% and outperforming other methods. Random forest generally outperforms other CART and conditional tree in general but in this case, it could not benefit from ensemble methods by using specified hyperparameters due to small dataset. Potentially, with tuning hyperparameters it could at least reach the performance of single tree with optimal cutoff. In terms of variable importance for best model, glucose predictor was the by far the most important in fitting this tree followed by mass and age to define whether diabetes is present.
+```{r}
+knitr::kable(cart.fit$variable.importance, caption="Variable Importance")
+```
 
 ## **Question 4 Multiple-Choice Questions**
 
-**1. Which of the following statements is true?**
+**1. Which of the following statements is true about tree-based methods?**
 
 A. Given the same dataset for both bagged decision tree and random forest, the number of predictors used at a single split will be equal between the two.
 
@@ -180,31 +208,31 @@ Answer: False. Random Forest uses a subset of predictors for model building, whe
 
 B. Generally on average, random forests perform better than bagged trees and single trees.
 
-Answer: True. Random forests perform better in practice due to the fact that forest has less correlated trees on average compared to bagging trees. It's also true that ensemble method which is random forest on average perform better than single trees due to the weighted averaging of end prediction which will have better generalization performance.
+Answer: True. Random forests perform better in practice due to the fact that forest has less correlated trees on average compared to bagging trees due to random feature selection for each bootstrapped sample and existence of Out-Of-Bag sample that allows to measure each bootstrapped fited tree's performance. It's also true that ensemble method which is random forest on average perform better than single trees due to the weighted averaging of end prediction of bootstrapped results which will have better generalization performance.
 
-C. Decision trees are affected by multicollinearity in features.
+C. Decision trees' performance is affected by multicollinearity.
 
-Answer: False. If, for example, 90% of features are correlated, decision tree will pick only one of them for splitting.
+Answer: False. If, for example, 10 features are highly correlated, decision tree will pick only one of these features to be used in splitting.
 
-D. Random forest tree can be interpreted as well as CART.
+D. Conditional inference trees have the same bias for picking features for splitting compared to CART decision trees.
 
-Answer: False. Random forest is a black box and can't be used for interpretation due to the large number of trees and bigger depth than cart. Even if taking into account only one tree, it can be very deep with thousands of nodes which is unbearable for human to interpret and use as an explanatory model.
+Answer: False. Conditional inference trees at each split calculate significance test statistics for each feature and feature with minimum p-value is chosen for splitting. CART prefers features with higher number of distinct values (especially fallible when a variable consists of both informative and noisy values) which leads to a feature selection bias problem. The whole purpose of conditional inference trees was to correct this selection bias and have completely unbiased feature selection for splitting.
 
 
-**2. What can be concluded about Random forest tree algorithm? ** 
+**2. What can be concluded as true about Random forest tree algorithm?** 
 
-A. Predictions from random forest generally have higher variance compared to decision trees.
+A. Random forest tree results can be interpreted as well as CART.
 
-Answer: False. Random forest have lower variance compared to decision tree due to attempts to reduce prediction variance by bootstrap aggregation i.e. training on different samples of the data.
+Answer: False. Random forest is a black box model and can't be used for interpretation due to the large number of trees and bigger depth than cart. Even if taking into account only one tree, it can be very deep with thousands of nodes which is unbearable for human to interpret and use as an explanatory model.
 
-B. Feature Normalization improves the prediction performance of random forests.
+B. Feature Normalization improves the prediction performance of random forest.
 
-Answer: False. Normalizing features does not improve performance because each node in the random forest tree is simply splitting a sorted list and not comparing one feature’s value to another feature’s value..
+Answer: False. Normalizing features does not improve performance because each node in the random forest tree is simply splitting based on criterion and there is no comparison between features' values. It is not only applicable to random forest but also to all decision trees in general.
 
-C. Variable importance of random forest highlights significant features to be used in predicting target variable in general regardless of the model used.
+C. Variable importance of random forest highlights significant features to be used in predicting target variable of the dataset in general regardless of the model used.
 
-Answer: False. Variable importance only showcases importance of features used in fitting a random forest model for the given training dataset. It should not be interpreted as a global significance of feature like in linear regression.
+Answer: False. Variable importance only showcases importance of features used in fitting this specific random forest model for the given dataset. It should not be interpreted as a global significance of feature like in linear regression.
 
-D. To reduce underfitting of random forest model, it is better to increase the depth of the tree.
+D. One of the random forest model's advantages is that it has low bias while also maintaining lower variance compared to other decision tree models.
 
-Answer: True. Increasing depth will help random forest to learn from training data better as more features are used in splitting due to increase depth. 
+Answer: True. As low bias is the feature of tree based models, high variance is one of its drawbacks dependent on feature number that leads to larger trees and potentially vulnerability to overfitting. However, compared to other tree models like CART and conditional inference tree, random forest model use bootstrap aggregation technique with random features to do prediction and afterwards uses weighted averaging technique which lowers the variance of predictions compared to classical decision tree models.
