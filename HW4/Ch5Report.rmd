@@ -1,0 +1,227 @@
+---
+title: "Ch5Report"
+author: "Madi Kassymbekov"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## **Question 1**
+There are two records per person, one for cancer recurrence and one for death.
+The variables are the following:
+id: subject id
+study: 1 for all patients
+rx: Treatment: Obs (no chemio), Lev (Levamisole), Lev+5-FU (Levamisol 5FU)
+sex: 1=male; 0=female
+age: age in years of the patient at baseline
+obstruct: obstruction of colon by tumour (1=yes / 0=no)
+perfor: perforation of colon (1=yes / 0=no)
+adhere: adherence to nearby organs (1=yes / 0=no)
+nodes: number of lymph nodes with detectable cancer
+time: days until event or censoring
+status: censoring status
+differ: differentiation of tumour (1=well, 2=moderate, 3=poor)
+extent: Extent of local spread (1=submucosa, 2=muscle, 3=serosa, 4=contiguous)
+surg: time from surgery to registration (0=short, 1=long)
+node4: more than 4 positive lymph nodes
+etype: event type: 1=cancer recurrence, 2=death
+
+1) Prepare the dataset in order to consider the following:
+- We’ll consider only the time-to-death as the event of interest (time to recurrence will not be used)
+- Variables differ and extent will be considered as numeric since they are ordered
+- The study variable will not be used
+- The first 500 subjects will be used for training and the remaining subjects will be used as a test set.
+```{r}
+library(survival)
+#Only time-to-death rows
+colondata <- colon[colon$etype==2,]
+colondata$study <- NULL
+colondata$etype <- NULL
+trainset <- colondata[1:500,]
+testset <- colondata[501:929,]
+```
+2) Compute basic descriptive statistics on the training dataset:
+i) What is the censoring rate ?
+```{r}
+#censoring rate
+censorRate <- nrow(trainset[trainset$status==1,])/nrow(trainset)
+print(sprintf("Censoring Rate: %f", censorRate))
+```
+Answer: Censoring Rate of training dataset is 0.508.
+
+ii) What is the mean/median/min/max values of the survival time ?
+```{r}
+#mean survival time
+mean <- mean(trainset$time)
+#median survival time
+median <- median(trainset$time)
+#min survival time
+min <- min(trainset$time)
+#max survival time
+max <- max(trainset$time)
+results <- data.frame("Overall Descriptive Statistics (Survival Time in days)",
+mean, median, min, max)
+names(results) <- c("Name", "Mean", "Median", "Min", "Max")
+knitr::kable(results, caption="mean/median/min/max values of the survival time in days")
+```
+Answer: For survival time in training dataset mean is 1784.834 days, median is 2189 days, minimum is 23 days and maximum is 3329 days.
+
+iii) Re-compute the mean/median/min/max values of the survival time, for each 
+value of the status variable. Explain and interpret the difference in the
+distributions.
+```{r}
+#survival time statistics for status = 1 (censored)
+meanCensor <- mean(trainset[trainset$status==1, "time"])
+medianCensor <- median(trainset[trainset$status==1, "time"])
+minCensor <- min(trainset[trainset$status==1, "time"])
+maxCensor <- max(trainset[trainset$status==1, "time"])
+
+#survival time statistics for status = 0 (non-censored)
+meanNoCensor <- mean(trainset[trainset$status==0, "time"])
+medianNoCensor <- median(trainset[trainset$status==0, "time"])
+minNoCensor <- min(trainset[trainset$status==0, "time"])
+maxNoCensor <- max(trainset[trainset$status==0, "time"])
+
+results[nrow(results) + 1,] = list(Name="Survival time stats for censored status=1", 
+                                   meanCensor, medianCensor,minCensor,maxCensor)
+results[nrow(results) + 1,] = list(Name="Survival time stats for non-censored status=0", 
+                                   meanNoCensor, medianNoCensor,minNoCensor,maxNoCensor)
+knitr::kable(results[2:3,], caption="Survival Time Statistics for each status")
+```
+Answer: Survival time statistics for each status are present above. It should be noted that each stat value is much higher for non-censored with status = 0 than for censored.
+
+3) Let’s see what the global estimated survival curve looks like… 
+i) Draw a Kaplan-Meyer (KM) estimate of the survival curve for the training
+data.
+```{r}
+kmfit=survfit(Surv(time, status) ~ 1, type="kaplan-meier", conf.type="log", data=trainset)
+plot(kmfit, xlab="Survival time (days)", ylab="Survival probability")
+```
+ii) What is the estimated probability to survive at least 400 days ?
+```{r}
+summary(kmfit, times = 400)
+```
+Probability to survive 400 days is 0.912 based on kaplan-meier estimator summary.
+
+iii) Draw the KM estimate of the survival curve for each type of treatment.
+Comment.
+```{r}
+treatkmfit=survfit(Surv(time, status) ~ rx, type="kaplan-meier", conf.type="log", 
+data=trainset)
+plot(treatkmfit, col=1:3, conf.int=TRUE)
+legend(240, .65, c("rx=Obs", "rx=Lev", "rx=Lev+5FU"),
+lty=c(1,1,1), col=c(1,2,3), bty='n', lwd=2)
+title("Kaplan-Meier estimator survival curve for each treatment")
+```
+Answer: Looking at KM curves, it is obvious that treatments Lev+5FU increases the survival probability across longer periods. Treatment Lev is not stable across longer periods and performs similarly or worse compared to the subjects with no treatment.
+
+iv) Explain why the confidence interval for the survival curve is larger towards
+the end of the curve
+Answer: As the survival period increases, number of observations decreases which affects/worsens the estimation precision of the confidence interval.
+
+4) Perform a log-rank test to compare the survival curves between treatment.
+Comment.
+```{r}
+survdiff(formula=Surv(time, status)~rx, data=trainset)
+```
+Answer: Chisquare statistic based on log-rank test is 8.6 and p-value is 0.01 by which we reject the null hypothesis that there is no difference in survival times between treatments.
+
+5) Use a Cox proportional hazard model to evaluate the effect of the treatment (use
+only this variable in the model).
+i) Interpret the two coefficients of the model (on the exponential scale)
+ii) Make a link between some parts of the R output and the previous question
+```{r}
+fitcox=coxph(Surv(time, status)~rx, data=trainset)
+summary(fitcox)
+```
+i) Based on the Cox proportional hazard model summary, if subject is given a dose of rxLev treatment and everything else remains fixed, the risk of time to death is multiplied by 0.8962 and therefore risk of death decreases compared with no treatment. Similarly for rxLev+5FU, risk of death is multiplied by 0.6369 and therefore risk of death decreases by even more compared to rxLev everything else remaining fixed.
+ii) Cox proportional hazard model summary also provides logrank test results automatically, which values are the same as performing it with survdiff. P-values are the same, but chisq is rounded to one decimal point in survdiff while in coxph it is up to two decimal points. Cox model also proved the log-rank test that there is a difference in survival times between treatments and Lev+5FU provides lowest risk of death compared to others.
+
+6) Use a Cox proportional hazard to evaluate the effect of all variables.
+i) Predict the risk of death for all subjects in the test set. Interpret this risk for
+the 1st subject (id=501)
+```{r}
+fitcox=coxph(Surv(time, status)~ . -id, data=trainset)
+summary(fitcox)
+predcoxrisk=predict(fitcox, newdata=testset, type="risk")
+id_501_risk <-predcoxrisk[1]
+```
+Answer: Compared to average person, risk of death for subject 501 is `r id_501_risk`.
+
+ii) Explain why some missing values are generated for the predicted risks
+```{r}
+testset$risk <- predcoxrisk
+
+testset[is.na(testset$risk)==TRUE,]
+```
+Answer: Persons with missing risk had missing covariates and therefore risk could not be estimated.
+
+iii) Give the list of the four subjects with the highest risk. By looking at their
+characteristics, make a link with the results of the Cox model you just fitted.
+```{r}
+toprisk <- testset[order(testset$risk, decreasing = TRUE, na.last = TRUE),]
+toprisk[1:4,]
+```
+Answer: Based on the cox model summary,three most impactful covariates for risk of death increase are node4 (more than 4 lymph nodes), extent (local spread extent) and differ (differentiation of tumour) with coefficients of 2.3205, 1.7168 and 1.3287 respectively. Top4 risk of death ids all have more than 4 lymph nodes, high possible extent of 3 and 4 (serosa and contigious structures) and differ value of 2 and 3 (moderate to poor tumour) which all contributed to the high risk values even thought top 2 ids had Lev and Lev+5FU treatments.
+
+7) Now, fit an accelerated Failure Time (AFT) model using all variables, assuming a lognormal
+distribution.
+i) Interpret the coefficient of the age variable (on the exponential scale)
+```{r}
+fitaft = survreg(Surv(time, status)~. -id, data=trainset, dist="lognormal")
+summary(fitaft)
+```
+Answer: When the age increases by one, then the average time of death is multiplied by exp(-0.017)=0.983, so decreases by a little bit.
+
+ii) On the test data, compute the predicted median survival time. Compare it with the actual survival time and comment.
+```{r}
+predaft = predict(fitaft, newdata=testset, type="response")
+testset$survtime <- predaft
+testsetNoNa <- na.omit(testset)
+medianActualTime <- median(testsetNoNa$time)
+medianAFTTime <- median(testsetNoNa$survtime)
+aftMAE <- mean(abs(testsetNoNa$survtime-testsetNoNa$time))
+aftMSE <- mean((testsetNoNa$survtime-testsetNoNa$time)^2)
+```
+Answer: As 18 rows of test set had missing covariates, these rows were excluded from performance comparison. Median survival time predicted by AFT is `r medianAFTTime`, while actual median survival time is `r medianActualTime`. AFT model overestimated the survival time by almost 1000 days which is too promising to be true compared to actual survival times which is proved by huge values of MSE is `r aftMSE` and MAE is `r aftMAE`. 
+
+iii) Plot the ranks of the subjects according to their predicted risk from the Cox
+model versus the rank computed from the predicted survival time.
+Comment.
+```{r}
+topsurvival <- testsetNoNa[order(testsetNoNa$survtime, decreasing = TRUE),]
+topsurvival$rank <- seq_along(topsurvival[,1])
+toprisk <- testset[order(testset$risk, decreasing = TRUE),]
+toprisk <- na.omit(toprisk)
+toprisk$rank <- seq_along(toprisk[,1])
+topsurvival <- topsurvival[order(topsurvival$id, decreasing = FALSE),]
+toprisk <- toprisk[order(toprisk$id, decreasing = FALSE),]
+testsetNoNa$survrank <- topsurvival$rank
+testsetNoNa$riskrank <- toprisk$rank
+plot(testsetNoNa$survrank, testsetNoNa$riskrank, xlab="Survival time rank", 
+ylab="Risk of death rank")
+```
+Answer: Based on the plot of survival time rank vs risk of death rank we can observe that there is more or less an agreement between cox and aft model predictions where a linear relationship can be seen. Survival time increases when the risk of death decreases.
+
+
+## **Question 2**
+
+Which of the following statements about survival analysis concepts is TRUE?
+
+A. One of the disadvantages of Cox model that there is a need to select probability distribution for a target variable.
+
+Answer: False. Compared to other models, Cox does not require target distribution however it can complicate computation of predictions.
+
+B. Kaplan-Meier estimator is a parametric statistic to estimate the survival function from the given time data.
+
+Answer: False. Kaplan-Meier estimator is in fact a non-parametric statistic. It does not assume any underlying probability distribution rather conditional probabilities are used at each time t.   
+
+C. When analyzing survival data one of the difficulties is that not all events can be observed.  
+
+Answer: True. Some subjects drop out before the end of experiment, some subjects survive well beyond the end of experiment time, etc. Therefore, censoring is used to account for these subjects through the observed time t to have some general information on such subjects.  
+
+D. AFT model can provide predictions for median survival regardless of the distribution of a target variable.
+
+Answer: False. AFT can provide estimated median survival time only to gaussian, lognormal, loglogistic and logistic distributions.
