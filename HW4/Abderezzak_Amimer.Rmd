@@ -1,0 +1,215 @@
+---
+title: "Assignment 4"
+author: "Abderezzak Amimer"
+date: "09/03/2021"
+output: pdf_document
+---
+
+### Question 1
+
+Preparing the data using the following code : 
+
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE , warning = FALSE , message = FALSE)
+library(survival)
+
+data <-colon
+
+# Considering only time of death
+
+index_death <- which(data$etype == 1)
+death <- data[-index_death , ]
+death$study <- NULL
+
+#Training 
+
+index_train <- seq(1 , 500 , 1 )
+death_train <- death[index_train , ]
+death_test <- death[-index_train , ]
+
+```
+
+
+### Question 2
+
+
+#### i) Censoring rate
+
+```{r senring rate}
+censoring_rate <- mean(death_train$status)
+```
+
+The censoring rate in the training data is `r censoring_rate`
+
+#### ii) descriptive statistics of survival time
+
+```{r desc survival time}
+mean <- mean(death_train$time)
+min <- min(death_train$time)
+max <- max(death_train$time)
+median <- median(death_train$time)
+```
+
+***Statistic***|***value***|
+---------------|-----------|
+mean|`r mean`|
+median|`r median`|
+min| `r min`|
+max|`r max`|
+
+#### iii) descriptive statistics of survival time for each status
+
+```{r desc survival status}
+index_surv <- which(death_train$status == 1 )
+
+#Statitics for censored 
+mean_c  <- mean(death_train[index_surv , "time"])
+median_c <- median(death_train[index_surv , "time"])
+min_c <- min(death_train[index_surv , "time"])
+max_c <- max(death_train[index_surv , "time"])
+
+#statistics for non censored
+mean_nc  <- mean(death_train[-index_surv , "time"])
+median_nc <- median(death_train[-index_surv , "time"])
+min_nc <- min(death_train[-index_surv , "time"])
+max_nc <- max(death_train[-index_surv , "time"])
+```
+
+
+***Statistic***|***Censored***|***Non-Censored***|
+---------------|--------------|------------------|
+Mean|`r mean_c`| `r mean_nc ` |
+Median|`r median_c`| `r median_nc `|
+Min|`r min_c`| `r min_nc `|
+Max|`r max_c`| `r max_nc `|
+
+There is an important difference between the censored data and the non censored one. On average, the censored subjects stay in the study for 571.27 days. That value is right skewed meaning that most censored subject leave before 571 days. Half of the leave before 384 days. Finally, the fastest a subject left the study was within 28 days and the longest it took a subject to leave the study was 2695 days. The same statistics are much higher in the non censored subjects. That result is expected since the censored subject time represent the moment where they leave the study, while the time for the non censored ones represent the time of death. In the case of the second group, they live on average 2474 days after the begining of the study. The distribution is left skewed which means that most subjects live than 2474 days. Half of them survive more than 2545 days. The minimal survival time is 23 days and the maximum is 3329 days. 
+
+
+### Question 3
+
+#### i) Drawing the survival time curve 
+
+```{r Keplan meier , fig.align="center"}
+keplan_meier=survfit(Surv(time,status) ~ 1 , type="kaplan-meier", conf.type="log",
+                    data = death_train)
+
+plot(keplan_meier ,
+     main = "Survival time of subjects following a certain type of chemotherapy",
+     xlab = "Number of days",
+     ylab = "Probability of surviving")
+```
+
+
+### ii) Estimating the probability of surviving after 400 days
+
+Looking at the previous graphic, we can estimate that the probability of surviving past 400 days is arround 0.7
+
+#### iii) 
+
+```{r different treatment , fig.align="center"}
+Obs_curve <- survfit(Surv(time,status) ~ 1 , type="kaplan-meier", conf.type="log",
+                    data = death_train[which(death_train$rx=="Obs") , ])
+
+Lev_5FU <- survfit(Surv(time,status) ~ 1 , type="kaplan-meier", conf.type="log",
+                    data = death_train[which(death_train$rx=="Lev+5FU") , ])
+
+Lev <- survfit(Surv(time,status) ~ 1 , type="kaplan-meier", conf.type="log",
+                    data = death_train[which(death_train$rx=="Lev") , ])
+
+# No treatment
+plot(Obs_curve$time , Obs_curve$surv , col= "blue", lty=1 , ylim = c(0,1) , type = "l", 
+     main = "Survival time of subjects following a certain type of chemotherapy",
+     xlab = "Number of days",
+     ylab = "Probability of surviving")
+
+# Lev_5FU
+lines(Lev_5FU$time, Lev_5FU$surv, col="red",lty=2)
+
+# Lev
+lines(Lev$time , Lev$surv , col="black", lty=4)
+
+# Legend
+legend(2400,0.97,legend=c("Obs","Lev+5FU","Lev"), col=c("blue","red","black"),
+lty=c(1,2,4), ncol=1)
+```
+
+According to the training data, the subjects who received the Lev+5Fu treatment seem to be the ones with the higher probability of survival with respect to time. The Lev treatment does not seem to have an important effect as it is sticking to the subjects not receiving treatments.
+
+#### iv) Confidence interval
+
+When we look at the first figure, we can see that the confidence interval increased with time. This effect is justified by the decreasing number of observations used to estimate the probability. As n decreases, the precision of our esitimation worsen.
+
+### Question 4 
+
+```{r Question 4}
+
+# We want to compare for the different treatments
+
+log_rank <- survdiff( formula = Surv(time , status) ~ rx , data=death_train)
+
+print(log_rank)
+```
+
+The log-rank test will allows us to compare the survival time for the different treatments used during the study. Having three different groups, we performed the following test :
+
+$$ H_0 : S_0(t)=S_1(t)=S_2(t) \forall t \in T $$
+
+$$ H_1 : S_0(t) \neq S_1(t) \neq S_2(t) $$
+
+With a P-Value smaller than 1% , we can reject the null hypothesis in favor of the alternative hypothesis. Therefore, we can state with 99% confidence level that the survival time differs between the different groups for at least one t.
+
+### Question 5 
+
+#### i) Coefficient interpretation
+
+```{r Question 5}
+cox_ph <- coxph(Surv(time, status) ~ rx , data = death_train)
+
+summary(cox_ph)
+```
+
+The cox model outputs two coefficients. One for treatment Lev and a second for treatment Lev+5FU. They represent relative risk ratios compared to the group that does not receive chemio. For the treatment group Lev, the coefficient on the exponential scale is $e^{\beta_1}= 0.9235$ and for the second treatment group, $e^{\beta_2}=0.5284$. It indicates that , relative to the individuals who don't receive chimio, the risk of dying for the individuals receiving the treatments are multiplied by 0.9235 for those getting the Lev treatment and 0.5284 for those getting the Lev+5FU.
+
+#### ii) Links
+
+When we analyse the output of survival time based on the treatement group, we can see that for all t observed, the probability of living up to time t, for all t, for the group Lev+5Fu is the greatest.The Lev treatment and the non treated group have a survival probability that match up to the 1000 day approximately and after that point, the group Lev maintain a higher survival time function. This phenomenon is not due to chance since the hypothesis test concluded that for at least one observed t, the survival times of the different groups differed. Finaly, the cox model also confirmed our intuition. The Lev+5Fu has a significant beta coefficient and the risk for that group is much lower compared the Lev group which does not have a significant coefficient as it matches the no treated group. 
+
+### Question 6
+
+```{r Question 6}
+fitcox <- coxph(Surv(time , status) ~ .-id , data = death_train)
+
+# Risk prediction for all subjects in the test set
+predcoxrisk <- predict(fitcox , newdata = death_test , type="risk")
+
+id_501 <- predcoxrisk[1]
+
+# Getting the ones being most at risk
+death_test$risk <- predcoxrisk
+top_4 <- order(death_test$risk , decreasing = TRUE , na.last = TRUE )
+top_4 <- top_4[1:4]
+```
+
+#### i)  Predictions on the test set and interpreting id 501.
+
+Relative to an average individual, the risk of death of the subject 501 is `r id_501`.
+
+#### ii) Missing values.
+The predicted risk is missing for ids that have missing values in the covariates. For those individuals, the estimation of risk is impossible without imputing values on those covariates.
+
+#### iii) Most at risk ids
+
+To grasp why the following four subjects have the highest predicted risk, we can look at the estimated cofficient from the cox model. It indicates that those who have more than 4 positive lymph nodes multiply their risk by 2.21. The subjects having the highest risk all have more thn 4 positive lymph nodes. The second most impactful covariate is the extent. Each increase of 1, increases the risk of death by 1.56 relative to an average individual and again, the top 4 ids all have an extent of 3 or more. Finally, the last important factor to note is the fact that the treatment Lev+5FU is an impactful variable when it comes to reducing the risk as it almost divides it by 2. None of the 4 subjects in question use it.
+
+
+```{r iii)}
+print(death_test[top_4 , ])
+
+summary(fitcox)
+```
+
+### Question 7
+
+
+
